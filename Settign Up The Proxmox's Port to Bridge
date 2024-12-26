@@ -1,0 +1,112 @@
+To achieve bonding of the 4 Ethernet ports and distribute VLANs to your virtual machines in Proxmox, you can follow these steps:
+
+---
+
+### **Step 1: Configure Bonding on the Physical Machine**
+
+1. **Access the Proxmox Host:**
+    - SSH into your Proxmox host or use the Proxmox web GUI.
+2. **Edit Network Configuration:**
+    - Open the `/etc/network/interfaces` file using a text editor (if you prefer CLI) or use the GUI.
+3. **Define the Bond:**
+    - Create a bonded interface (`bond0`) using the 4 Ethernet ports (`eth0`, `eth1`, `eth2`, `eth3`).
+    
+    Example configuration:
+    
+    ```bash
+    auto bond0
+    iface bond0 inet manual
+        bond-slaves eth0 eth1 eth2 eth3
+        bond-miimon 100
+        bond-mode 802.3ad
+    
+    ```
+    
+    - `bond-mode 802.3ad` enables LACP (Link Aggregation Control Protocol), which requires your switch to support and be configured for LACP.
+    - `bond-miimon 100` checks the link status every 100ms.
+4. **Bridge Setup:**
+    - Add a bridge interface (`vmbr0`) on top of the bonded interface. This bridge will manage your VLAN traffic.
+    
+    Example:
+    
+    ```bash
+    auto vmbr0
+    iface vmbr0 inet manual
+        bridge-ports bond0
+        bridge-stp off
+        bridge-fd 0
+    
+    ```
+    
+5. **Apply the Configuration:**
+    - Restart networking to apply changes:
+        
+        ```bash
+        systemctl restart networking
+        
+        ```
+        
+    - Alternatively, reboot the Proxmox host if required.
+
+---
+
+### **Step 2: Configure VLANs in Proxmox**
+
+1. **Create VLAN Interfaces:**
+    - Each VLAN is represented by a subinterface of the bond (`bond0.<VLAN-ID>`) or bridge (`vmbr0.<VLAN-ID>`).
+    
+    Example for VLAN 10 and VLAN 20:
+    
+    ```bash
+    auto vmbr0.10
+    iface vmbr0.10 inet manual
+        bridge_ports bond0.10
+        bridge_stp off
+        bridge_fd 0
+    
+    auto vmbr0.20
+    iface vmbr0.20 inet manual
+        bridge_ports bond0.20
+        bridge_stp off
+        bridge_fd 0
+    
+    ```
+    
+2. **Assign VLANs to Virtual Machines:**
+    - In the Proxmox web GUI:
+        - Edit the virtual machine's network interface.
+        - Select the VLAN tag corresponding to the VLAN ID (e.g., VLAN 10 or 20).
+        - Use `vmbr0` as the bridge.
+
+---
+
+### **Step 3: Switch Configuration**
+
+Ensure your physical switch is properly configured:
+
+- Enable LACP (802.3ad) for the 4 ports connected to your Proxmox host.
+- Configure the switch ports as trunk ports to allow tagged VLAN traffic.
+
+---
+
+### **Testing and Validation**
+
+1. Verify the bonding status:
+    
+    ```bash
+    cat /proc/net/bonding/bond0
+    
+    ```
+    
+    - Ensure all 4 interfaces are active.
+2. Validate VLAN traffic:
+    - Test connectivity from virtual machines on different VLANs to ensure proper isolation and tagging.
+
+---
+
+This setup ensures high availability, load balancing (with LACP), and efficient VLAN distribution to your VMs.
+
+<aside>
+💡 Utilisez ce modèle pour documenter votre façon de faire passer des entretiens techniques à de potentiels candidats à des postes d’ingénieurs.
+
+</aside>
